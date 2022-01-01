@@ -65,7 +65,7 @@ func handleRequests(listener net.Listener, requests *sync.WaitGroup) {
 		case "GET\r\n":
 			fmt.Fprintf(conn, "OK")
 		default:
-			fmt.Fprintf(conn, "Unknown command")
+			fmt.Fprintf(conn, "CLIENT_ERROR unknown command")
 		}
 
 		conn.Close()
