@@ -29,7 +29,7 @@ func TestServerGet(t *testing.T) {
 		t.Fatalf("cannot read: %v", err)
 	}
 
-	if string(resp) != "OK" {
+	if string(resp) != "OK\r\n" {
 		t.Fatalf("unexpected response: %v", string(resp))
 	}
 
@@ -49,7 +49,7 @@ func TestServerUnknownCommand(t *testing.T) {
 		t.Fatalf("cannot read: %v", err)
 	}
 
-	if string(resp) != "CLIENT_ERROR unknown command" {
+	if string(resp) != "CLIENT_ERROR unknown command\r\n" {
 		t.Fatalf("unexpected response: %v", string(resp))
 	}
 

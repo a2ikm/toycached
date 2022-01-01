@@ -55,6 +55,11 @@ type request struct {
 	cm command
 }
 
+func respond(conn net.Conn, format string, a ...interface{}) {
+	format = fmt.Sprintf("%s\r\n", format)
+	fmt.Fprintf(conn, format, a...)
+}
+
 func parseRequest(buf []byte) (request, error) {
 	if !bytes.HasSuffix(buf, []byte("\r\n")) {
 		return request{}, errors.New("malformed request")
@@ -78,13 +83,13 @@ func handleRequest(conn net.Conn) {
 
 	req, err := parseRequest(buf[:n])
 	if err != nil {
-		fmt.Fprintf(conn, "CLIENT_ERROR %v", err)
+		respond(conn, "CLIENT_ERROR %v", err)
 		return
 	}
 
 	switch req.cm {
 	case commandGet:
-		fmt.Fprintf(conn, "OK")
+		respond(conn, "OK")
 	}
 }
 
