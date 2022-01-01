@@ -11,7 +11,7 @@ import (
 )
 
 func startServer(done <-chan interface{}) (<-chan interface{}, error) {
-	server, err := net.Listen("tcp", "localhost:11211")
+	listener, err := net.Listen("tcp", "localhost:11211")
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 		starter.Done()
 
 		<-done
-		server.Close()
+		listener.Close()
 		requests.Wait()
 		close(terminated)
 	}()
@@ -36,16 +36,16 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 	go func() {
 		starter.Done()
 
-		handleRequests(server, &requests)
+		handleRequests(listener, &requests)
 	}()
 
 	starter.Wait()
 	return terminated, nil
 }
 
-func handleRequests(server net.Listener, requests *sync.WaitGroup) {
+func handleRequests(listener net.Listener, requests *sync.WaitGroup) {
 	for {
-		conn, err := server.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Printf("cannot accept connection: %v", err)
 			continue
