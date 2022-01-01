@@ -9,8 +9,10 @@ import (
 )
 
 func init() {
-	// Ensure the goroutine server started
-	server, err := newServer()
+	data := map[string][]byte{
+		"foo": []byte("foo value"),
+	}
+	server, err := newServer(data)
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
@@ -25,13 +27,23 @@ func TestServer(t *testing.T) {
 	}{
 		{
 			"Successful GET",
-			"GET\r\n",
-			"OK\r\n",
+			"GET foo\r\n",
+			"foo value\r\nENDS\r\n",
 		},
 		{
-			"Non-CRLF GET",
-			"GET",
+			"Non-existing GET",
+			"GET bar\r\n",
+			"ENDS\r\n",
+		},
+		{
+			"CRLF-less GET",
+			"GET foo",
 			"CLIENT_ERROR malformed request\r\n",
+		},
+		{
+			"Key-less GET",
+			"GET\r\n",
+			"CLIENT_ERROR no key\r\n",
 		},
 		{
 			"Unknown command",

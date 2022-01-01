@@ -17,9 +17,10 @@ type server struct {
 	requests   sync.WaitGroup
 	done       chan interface{}
 	terminated chan interface{}
+	data       map[string][]byte
 }
 
-func newServer() (server, error) {
+func newServer(data map[string][]byte) (server, error) {
 	listener, err := net.Listen("tcp", "localhost:11211")
 	if err != nil {
 		return server{}, err
@@ -30,6 +31,7 @@ func newServer() (server, error) {
 		requests:   sync.WaitGroup{},
 		done:       make(chan interface{}),
 		terminated: make(chan interface{}),
+		data:       data,
 	}, nil
 }
 
@@ -76,6 +78,8 @@ func (srv server) handleRequests() {
 	}
 }
 
+// TODO: decouple domain logic and network adapter
+// This method should just connect them, but not pass conn to domain logic
 func (srv server) handleRequest(conn net.Conn) {
 	defer conn.Close()
 
@@ -93,8 +97,17 @@ func (srv server) handleRequest(conn net.Conn) {
 
 	switch req.cm {
 	case commandGet:
-		respond(conn, "OK")
+		srv.doGet(conn, req)
 	}
+}
+
+func (srv server) doGet(conn net.Conn, req request) {
+	val, ok := srv.data[req.key]
+	if ok {
+		conn.Write(val)
+		respond(conn, "") // write \r\n
+	}
+	fmt.Fprintf(conn, "ENDS\r\n")
 }
 
 type command int
@@ -104,7 +117,8 @@ const (
 )
 
 type request struct {
-	cm command
+	cm  command
+	key string
 }
 
 func respond(conn net.Conn, format string, a ...interface{}) {
@@ -118,12 +132,27 @@ func parseRequest(buf []byte) (request, error) {
 	}
 	buf = buf[0 : len(buf)-2]
 
-	switch {
-	case bytes.HasPrefix(buf, []byte("GET")):
-		return request{commandGet}, nil
+	parts := bytes.SplitN(buf, []byte(" "), 2)
+	cm := string(parts[0])
+
+	switch cm {
+	case "GET":
+		return parseRequestGet(parts[1:])
 	default:
 		return request{}, errors.New("unknown command")
 	}
+}
+
+// TODO: support multiple keys
+func parseRequestGet(parts [][]byte) (request, error) {
+	if len(parts) == 0 {
+		return request{}, errors.New("no key")
+	}
+
+	return request{
+		cm:  commandGet,
+		key: string(parts[0]),
+	}, nil
 }
 
 func waitSignal() {
@@ -133,7 +162,8 @@ func waitSignal() {
 }
 
 func main() {
-	server, err := newServer()
+	data := make(map[string][]byte)
+	server, err := newServer(data)
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
