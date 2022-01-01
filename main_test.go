@@ -3,14 +3,17 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"testing"
 )
 
 func init() {
 	// Ensure the goroutine server started
-	wg := startServer()
-	wg.Wait()
+	_, err := startServer(nil)
+	if err != nil {
+		log.Fatalf("cannot start server: %v", err)
+	}
 }
 
 func TestServerGet(t *testing.T) {
