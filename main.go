@@ -12,37 +12,89 @@ import (
 	"syscall"
 )
 
-func startServer(done <-chan interface{}) (<-chan interface{}, error) {
+type server struct {
+	listener   net.Listener
+	requests   sync.WaitGroup
+	done       chan interface{}
+	terminated chan interface{}
+}
+
+func newServer() (server, error) {
 	listener, err := net.Listen("tcp", "localhost:11211")
 	if err != nil {
-		return nil, err
+		return server{}, err
 	}
 
+	return server{
+		listener:   listener,
+		requests:   sync.WaitGroup{},
+		done:       make(chan interface{}),
+		terminated: make(chan interface{}),
+	}, nil
+}
+
+func (srv server) shutdown() {
+	close(srv.done)
+	<-srv.terminated
+}
+
+func (srv server) start() {
 	var starter sync.WaitGroup
 	starter.Add(2)
-
-	var requests sync.WaitGroup
-	terminated := make(chan interface{})
 
 	// goroutine to control gracefull shutdown
 	go func() {
 		starter.Done()
 
-		<-done
-		listener.Close()
-		requests.Wait()
-		close(terminated)
+		<-srv.done
+		srv.listener.Close()
+		srv.requests.Wait()
+		close(srv.terminated)
 	}()
 
 	// goroutine to handle requests
 	go func() {
 		starter.Done()
 
-		handleRequests(listener, &requests)
+		srv.handleRequests()
 	}()
 
 	starter.Wait()
-	return terminated, nil
+}
+
+func (srv server) handleRequests() {
+	for {
+		conn, err := srv.listener.Accept()
+		if err != nil {
+			log.Printf("cannot accept connection: %v", err)
+			continue
+		}
+
+		srv.requests.Add(1)
+		srv.handleRequest(conn)
+		srv.requests.Done()
+	}
+}
+
+func (srv server) handleRequest(conn net.Conn) {
+	defer conn.Close()
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+
+	req, err := parseRequest(buf[:n])
+	if err != nil {
+		respond(conn, "CLIENT_ERROR %v", err)
+		return
+	}
+
+	switch req.cm {
+	case commandGet:
+		respond(conn, "OK")
+	}
 }
 
 type command int
@@ -74,40 +126,6 @@ func parseRequest(buf []byte) (request, error) {
 	}
 }
 
-func handleRequest(conn net.Conn) {
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return
-	}
-
-	req, err := parseRequest(buf[:n])
-	if err != nil {
-		respond(conn, "CLIENT_ERROR %v", err)
-		return
-	}
-
-	switch req.cm {
-	case commandGet:
-		respond(conn, "OK")
-	}
-}
-
-func handleRequests(listener net.Listener, requests *sync.WaitGroup) {
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("cannot accept connection: %v", err)
-			continue
-		}
-
-		requests.Add(1)
-		handleRequest(conn)
-		conn.Close()
-		requests.Done()
-	}
-}
-
 func waitSignal() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -115,13 +133,12 @@ func waitSignal() {
 }
 
 func main() {
-	done := make(chan interface{})
-	terminated, err := startServer(done)
+	server, err := newServer()
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
 
+	server.start()
 	waitSignal()
-	close(done)
-	<-terminated
+	server.shutdown()
 }

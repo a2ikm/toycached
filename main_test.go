@@ -10,10 +10,11 @@ import (
 
 func init() {
 	// Ensure the goroutine server started
-	_, err := startServer(nil)
+	server, err := newServer()
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
+	server.start()
 }
 
 func TestServer(t *testing.T) {
