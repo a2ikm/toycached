@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -82,31 +83,40 @@ func (srv server) handleRequests() {
 func (srv server) handleRequest(conn net.Conn) {
 	defer conn.Close()
 
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
+	in := make([]byte, 1024)
+	n, err := conn.Read(in)
 	if err != nil {
 		return
 	}
 
-	req, err := parseRequest(buf[:n])
+	out := process(in[:n], srv.data)
+	conn.Write(out)
+}
+
+func process(in []byte, data map[string][]byte) []byte {
+	var buf bytes.Buffer
+
+	req, err := parseRequest(in)
 	if err != nil {
-		respond(conn, "CLIENT_ERROR %v", err)
-		return
+		fmt.Fprintf(&buf, "CLIENT_ERROR %v\r\n", err)
+		return buf.Bytes()
 	}
 
 	switch req.cm {
 	case commandGet:
-		srv.doGet(conn, req)
+		doGet(&buf, req, data)
 	}
+
+	return buf.Bytes()
 }
 
-func (srv server) doGet(conn net.Conn, req request) {
-	val, ok := srv.data[req.key]
+func doGet(out io.Writer, req request, data map[string][]byte) {
+	val, ok := data[req.key]
 	if ok {
-		conn.Write(val)
-		respond(conn, "") // write \r\n
+		out.Write(val)
+		fmt.Fprintf(out, "\r\n")
 	}
-	fmt.Fprintf(conn, "ENDS\r\n")
+	fmt.Fprintf(out, "ENDS\r\n")
 }
 
 type command int
@@ -118,11 +128,6 @@ const (
 type request struct {
 	cm  command
 	key string
-}
-
-func respond(conn net.Conn, format string, a ...interface{}) {
-	format = fmt.Sprintf("%s\r\n", format)
-	fmt.Fprintf(conn, format, a...)
 }
 
 func parseRequest(buf []byte) (request, error) {
