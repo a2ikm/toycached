@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -43,6 +45,30 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 	return terminated, nil
 }
 
+type command int
+
+const (
+	commandGet command = iota
+)
+
+type request struct {
+	cm command
+}
+
+func parseRequest(buf []byte) (request, error) {
+	if !bytes.HasSuffix(buf, []byte("\r\n")) {
+		return request{}, errors.New("malformed request")
+	}
+	buf = buf[0 : len(buf)-2]
+
+	switch {
+	case bytes.HasPrefix(buf, []byte("GET")):
+		return request{commandGet}, nil
+	default:
+		return request{}, errors.New("unknown command")
+	}
+}
+
 func handleRequest(conn net.Conn) {
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
@@ -50,11 +76,15 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	switch string(buf[:n]) {
-	case "GET\r\n":
+	req, err := parseRequest(buf[:n])
+	if err != nil {
+		fmt.Fprintf(conn, "CLIENT_ERROR %v", err)
+		return
+	}
+
+	switch req.cm {
+	case commandGet:
 		fmt.Fprintf(conn, "OK")
-	default:
-		fmt.Fprintf(conn, "CLIENT_ERROR unknown command")
 	}
 }
 
