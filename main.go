@@ -43,6 +43,21 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 	return terminated, nil
 }
 
+func handleRequest(conn net.Conn) {
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+
+	switch string(buf[:n]) {
+	case "GET\r\n":
+		fmt.Fprintf(conn, "OK")
+	default:
+		fmt.Fprintf(conn, "CLIENT_ERROR unknown command")
+	}
+}
+
 func handleRequests(listener net.Listener, requests *sync.WaitGroup) {
 	for {
 		conn, err := listener.Accept()
@@ -52,22 +67,7 @@ func handleRequests(listener net.Listener, requests *sync.WaitGroup) {
 		}
 
 		requests.Add(1)
-
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			conn.Close()
-			requests.Done()
-			continue
-		}
-
-		switch string(buf[:n]) {
-		case "GET\r\n":
-			fmt.Fprintf(conn, "OK")
-		default:
-			fmt.Fprintf(conn, "CLIENT_ERROR unknown command")
-		}
-
+		handleRequest(conn)
 		conn.Close()
 		requests.Done()
 	}
