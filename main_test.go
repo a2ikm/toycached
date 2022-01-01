@@ -12,11 +12,10 @@ func init() {
 	data := map[string][]byte{
 		"foo": []byte("foo value"),
 	}
-	server, err := newServer(data)
+	_, err := startServer(data)
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
-	server.start()
 }
 
 func TestServer(t *testing.T) {

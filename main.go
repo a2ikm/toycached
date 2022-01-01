@@ -20,27 +20,20 @@ type server struct {
 	data       map[string][]byte
 }
 
-func newServer(data map[string][]byte) (server, error) {
+func startServer(data map[string][]byte) (server, error) {
 	listener, err := net.Listen("tcp", "localhost:11211")
 	if err != nil {
 		return server{}, err
 	}
 
-	return server{
+	srv := server{
 		listener:   listener,
 		requests:   sync.WaitGroup{},
 		done:       make(chan interface{}),
 		terminated: make(chan interface{}),
 		data:       data,
-	}, nil
-}
+	}
 
-func (srv server) shutdown() {
-	close(srv.done)
-	<-srv.terminated
-}
-
-func (srv server) start() {
 	var starter sync.WaitGroup
 	starter.Add(2)
 
@@ -62,6 +55,12 @@ func (srv server) start() {
 	}()
 
 	starter.Wait()
+	return srv, nil
+}
+
+func (srv server) shutdown() {
+	close(srv.done)
+	<-srv.terminated
 }
 
 func (srv server) handleRequests() {
@@ -163,12 +162,11 @@ func waitSignal() {
 
 func main() {
 	data := make(map[string][]byte)
-	server, err := newServer(data)
+	server, err := startServer(data)
 	if err != nil {
 		log.Fatalf("cannot start server: %v", err)
 	}
 
-	server.start()
 	waitSignal()
 	server.shutdown()
 }
