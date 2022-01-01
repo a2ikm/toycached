@@ -22,6 +22,7 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 	var requests sync.WaitGroup
 	terminated := make(chan interface{})
 
+	// goroutine to control gracefull shutdown
 	go func() {
 		starter.Done()
 
@@ -31,6 +32,7 @@ func startServer(done <-chan interface{}) (<-chan interface{}, error) {
 		close(terminated)
 	}()
 
+	// goroutine to handle requests
 	go func() {
 		starter.Done()
 
