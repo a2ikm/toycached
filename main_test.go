@@ -35,6 +35,26 @@ func TestServer(t *testing.T) {
 			"ENDS\r\n",
 		},
 		{
+			"Set new key with SET",
+			"SET bar bar value\r\n",
+			"STORED\r\n",
+		},
+		{
+			"Stored key",
+			"GET bar\r\n",
+			"bar value\r\nENDS\r\n",
+		},
+		{
+			"Overwrite key with SET",
+			"SET bar bar value updated\r\n",
+			"STORED\r\n",
+		},
+		{
+			"Overwritten key",
+			"GET bar\r\n",
+			"bar value updated\r\nENDS\r\n",
+		},
+		{
 			"CRLF-less GET",
 			"GET foo",
 			"CLIENT_ERROR malformed request\r\n",
@@ -48,6 +68,16 @@ func TestServer(t *testing.T) {
 			"Unknown command",
 			"FOO\r\n",
 			"CLIENT_ERROR unknown command\r\n",
+		},
+		{
+			"Value-less SET",
+			"SET baz\r\n",
+			"CLIENT_ERROR no value\r\n",
+		},
+		{
+			"Key-and-value-less SET",
+			"SET\r\n",
+			"CLIENT_ERROR no key nor value\r\n",
 		},
 	}
 	for _, test := range tests {

@@ -105,6 +105,8 @@ func process(in []byte, data map[string][]byte) []byte {
 	switch req.cm {
 	case commandGet:
 		doGet(&buf, req, data)
+	case commandSet:
+		doSet(&buf, req, data)
 	}
 
 	return buf.Bytes()
@@ -119,17 +121,28 @@ func doGet(out io.Writer, req request, data map[string][]byte) {
 	fmt.Fprintf(out, "ENDS\r\n")
 }
 
+func doSet(out io.Writer, req request, data map[string][]byte) {
+	data[req.key] = req.value
+	fmt.Fprintf(out, "STORED\r\n")
+}
+
 type command int
 
 const (
 	commandGet command = iota
+	commandSet
 )
 
 type request struct {
-	cm  command
-	key string
+	cm    command
+	key   string
+	value []byte
 }
 
+// GET <key>\r\n
+// SET <key> <value>\r\n
+//
+// TODO: support multilined request for set command
 func parseRequest(buf []byte) (request, error) {
 	if !bytes.HasSuffix(buf, []byte("\r\n")) {
 		return request{}, errors.New("malformed request")
@@ -142,6 +155,8 @@ func parseRequest(buf []byte) (request, error) {
 	switch cm {
 	case "GET":
 		return parseRequestGet(parts[1:])
+	case "SET":
+		return parseRequestSet(parts[1:])
 	default:
 		return request{}, errors.New("unknown command")
 	}
@@ -154,8 +169,26 @@ func parseRequestGet(parts [][]byte) (request, error) {
 	}
 
 	return request{
-		cm:  commandGet,
-		key: string(parts[0]),
+		cm:    commandGet,
+		key:   string(parts[0]),
+		value: []byte{},
+	}, nil
+}
+
+func parseRequestSet(parts [][]byte) (request, error) {
+	if len(parts) == 0 {
+		return request{}, errors.New("no key nor value")
+	}
+
+	keyAndValue := bytes.SplitN(parts[0], []byte(" "), 2)
+	if len(keyAndValue) == 1 {
+		return request{}, errors.New("no value")
+	}
+
+	return request{
+		cm:    commandSet,
+		key:   string(keyAndValue[0]),
+		value: keyAndValue[1],
 	}, nil
 }
 
